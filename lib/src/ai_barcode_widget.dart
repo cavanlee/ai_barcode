@@ -251,4 +251,8 @@ class CreatorController {
   }) {
     AiBarcodeCreatorPlatform.instance.updateQRCodeValue(value);
   }
+
+  Future<String> saveImage() async {
+    return await AiBarcodeCreatorPlatform.instance.saveQRCodeImage();
+  }
 }

@@ -1,10 +1,18 @@
 package com.air.ai_barcode
 
+import android.content.ContentValues
 import android.content.Context
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.graphics.drawable.BitmapDrawable
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.view.View
 import android.widget.ImageView
 import android.widget.TextView
+import android.widget.Toast
 import com.google.zxing.BarcodeFormat
 import com.google.zxing.EncodeHintType
 import com.google.zxing.Result
@@ -17,6 +25,14 @@ import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.platform.PlatformView
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
+import java.io.IOException
+import java.io.OutputStream
 
 import java.util.*
 
@@ -55,6 +71,11 @@ class AndroidCreatorView(
         this.channelResult = result;
         when (call.method) {
             "updateQRCodeValue" -> updateQRCodeValue(call.argument("qrCodeContent"), 300, 300)
+            "saveImage" ->  if (Build.VERSION.SDK_INT < 29) {
+                saveImage()
+            } else {
+                saveImage29()
+            }
 //            "stopCamera" -> stopCamera()
 //            "resumeCameraPreview" -> resumeCameraPreview()
 //            "stopCameraPreview" -> stopCameraPreview()
@@ -119,6 +140,7 @@ class AndroidCreatorView(
     }
 
 
+
     private fun createQRImage(
         content: String?, widthPix: Int, heightPix: Int
     ): Bitmap? {
@@ -167,4 +189,49 @@ class AndroidCreatorView(
         imageView.setImageBitmap(createQRImage(content, widthPix, heightPix))
     }
 
+    /**
+     * 保存图片到相册的方法
+     *  API29 后此方法已废弃
+     */
+    private fun saveImage() {
+
+        val toBitmap = (imageView.drawable as BitmapDrawable).bitmap
+        val insertImage = MediaStore.Images.Media.insertImage(
+                imageView.context.contentResolver, toBitmap, "壁纸", "搜索猫相关图片后保存的图片"
+        )
+        if (insertImage.isNotEmpty()) {
+            Toast.makeText(imageView.context, "图片保存成功！-${insertImage}", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(imageView.context, "图片保存失败！}", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+    /**
+     * API29 中的最新保存图片到相册的方法
+     */
+    private fun saveImage29() {
+        val toBitmap = (imageView.drawable as BitmapDrawable).bitmap
+        val insertUri = imageView.context.contentResolver.insert(
+                MediaStore.Images.Media.EXTERNAL_CONTENT_URI, ContentValues()
+        ) ?: kotlin.run {
+            showSaveToast("保存失败！")
+            return
+        }
+        //使用use可以自动关闭流
+        imageView.context.contentResolver.openOutputStream(insertUri).use {
+            if (toBitmap.compress(Bitmap.CompressFormat.JPEG, 90, it)) {
+                showSaveToast("保存成功！")
+            } else {
+                showSaveToast("保存失败！")
+            }
+        }
+    }
+
+    /**
+     * 显示保存图片结果的方法
+     */
+    private fun showSaveToast(showMsg: String) =
+            MainScope().launch {
+                Toast.makeText(imageView.context, showMsg, Toast.LENGTH_SHORT).show()
+            }
 }
